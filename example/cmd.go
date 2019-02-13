@@ -9,6 +9,7 @@ import (
 
 	"github.com/streadway/amqp"
 	rmq "github.com/vsdmars/rmqclient"
+	"go.uber.org/zap/zapcore"
 )
 
 func consume(ctx context.Context, channel *amqp.Channel) error {
@@ -32,9 +33,6 @@ func consume(ctx context.Context, channel *amqp.Channel) error {
 			return errors.New("application ends")
 		case d, ok := <-deliveries:
 			if ok {
-				// passing down the byte slice which is a more
-				// compact data structure than string,
-				// thus do not decoding the message here
 				fmt.Printf("msg: %v\n", string(d.Body))
 				d.Ack(false)
 			} else {
@@ -63,6 +61,9 @@ func main() {
 		Port:          5673,
 		ReconnectWait: time.Duration(3),
 	}
+
+	// https://godoc.org/go.uber.org/zap/zapcore#Level
+	rmq.SetLogLevel(zapcore.DebugLevel)
 
 	r, _ := rmq.NewRmq(ctx, config)
 	r.RegisterConsumeHandle(consume)

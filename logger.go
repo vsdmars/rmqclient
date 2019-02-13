@@ -10,20 +10,39 @@ import (
 )
 
 var logger appLogger
+var origLogger appLogger
 var once gosync.Once
 
 func init() {
 	initLogger()
 
 	// default debug level
-	setLevel(zapcore.DebugLevel)
+	SetLogLevel(zapcore.DebugLevel)
 }
 
 func sync() {
 	logger.Sync()
 }
 
-func setLevel(l zapcore.Level) {
+// SetLog sets caller provided zap logger
+// reset to rmqclient's logger by passing in nil pointer
+func SetLog(l *zap.Logger) {
+	if l != nil {
+		logger.Logger = l
+		logger.provided = true
+		return
+	}
+
+	logger = origLogger
+}
+
+// SetLogLevel sets the rmqclient log level
+// noop if caller provides it's own zap logger
+func SetLogLevel(l zapcore.Level) {
+	if logger.provided {
+		return
+	}
+
 	logger.atom.SetLevel(l)
 }
 
@@ -51,7 +70,8 @@ func initLogger() {
 			os.Exit(1)
 		}
 
-		logger = appLogger{mylogger, &atom}
+		logger = appLogger{mylogger, &atom, false}
+		origLogger = logger
 	}
 
 	once.Do(initLogger)

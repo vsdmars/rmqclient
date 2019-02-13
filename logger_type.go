@@ -6,5 +6,6 @@ import (
 
 type appLogger struct {
 	*zap.Logger
-	atom *zap.AtomicLevel
+	atom     *zap.AtomicLevel
+	provided bool
 }

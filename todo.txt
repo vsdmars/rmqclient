@@ -1,2 +1,2 @@
 1. publish callback
-2. validate configuation
+2. validate configuation struct
