@@ -29,31 +29,33 @@ func (rmq *RmqStruct) RegisterConsumeHandle(handle ConsumeHandle) {
 
 // Run starts rabbitmq service
 //
+// Non-block call
 // Runs as daemon, exit on caller's context cancel()
 func (rmq *RmqStruct) Run() {
 	// sync logger
 	defer Sync()
 
-	logger.Info(
-		"service starts",
-		zap.String("service", serviceName),
-		zap.String("uuid", rmq.uuid),
-	)
+	go func() {
+		logger.Info(
+			"service starts",
+			zap.String("service", serviceName),
+			zap.String("uuid", rmq.uuid),
+		)
 
-	for {
-		select {
-		case <-rmq.ctx.Done():
-			return
-		default:
-			for s := range rmq.start() {
-				logger.Info(
-					"status",
-					zap.String("service", serviceName),
-					zap.String("uuid", rmq.uuid),
-					zap.String("status", s),
-				)
+		for {
+			select {
+			case <-rmq.ctx.Done():
+				return
+			default:
+				for s := range rmq.start() {
+					logger.Info(
+						"status",
+						zap.String("service", serviceName),
+						zap.String("uuid", rmq.uuid),
+						zap.String("status", s),
+					)
+				}
 			}
 		}
-	}
-
+	}()
 }
