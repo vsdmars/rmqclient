@@ -30,6 +30,7 @@ func (rmq *RmqStruct) RegisterConsumeHandle(handle ConsumeHandle) {
 // Run starts rabbitmq service
 //
 // Non-block call
+//
 // Runs as daemon, exit on caller's context cancel()
 func (rmq *RmqStruct) Run() {
 	// sync logger
