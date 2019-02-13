@@ -31,6 +31,9 @@ func (rmq *RmqStruct) RegisterConsumeHandle(handle ConsumeHandle) {
 //
 // Runs as daemon, exit on caller's context cancel()
 func (rmq *RmqStruct) Run() {
+	// sync logger
+	defer Sync()
+
 	logger.Info(
 		"service starts",
 		zap.String("service", serviceName),

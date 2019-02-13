@@ -20,14 +20,16 @@ func init() {
 	SetLogLevel(zapcore.DebugLevel)
 }
 
-func sync() {
+// Sync sync logger output
+func Sync() {
+	// ignore logger Sync error
 	logger.Sync()
 }
 
-// SetLog sets caller provided zap logger
+// SetLogger sets caller provided zap logger
 //
 // reset to rmqclient's logger by passing in nil pointer
-func SetLog(l *zap.Logger) {
+func SetLogger(l *zap.Logger) {
 	if l != nil {
 		logger.Logger = l
 		logger.provided = true

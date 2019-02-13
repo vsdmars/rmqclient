@@ -87,7 +87,7 @@ func (rmq *RmqStruct) catchEvent() error {
 			errors.New("service ends, cleanup connection loop"),
 			false,
 		}
-	case err, _ := <-rmq.connCloseError:
+	case err := <-rmq.connCloseError:
 		logger.Warn(
 			"lost connection",
 			zap.String("service", serviceName),
@@ -99,7 +99,7 @@ func (rmq *RmqStruct) catchEvent() error {
 			err,
 			true,
 		}
-	case val, _ := <-rmq.channelCancelError:
+	case val := <-rmq.channelCancelError:
 		// interestingly, the amqp library won't trigger
 		// this event iff we are not using amqp.Channel
 		// to declare the queue.
