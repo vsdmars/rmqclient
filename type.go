@@ -37,6 +37,8 @@ type (
 		channelCancelError chan string      // NotifyCancel
 	}
 
-	// ConsumeHandle handler for consumer
+	// ConsumeHandle consumer callback handle's signature
+	//
+	// Handle should honor passing-in context for cleanup
 	ConsumeHandle func(context.Context, *amqp.Channel) error
 )

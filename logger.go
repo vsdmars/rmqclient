@@ -25,6 +25,7 @@ func sync() {
 }
 
 // SetLog sets caller provided zap logger
+//
 // reset to rmqclient's logger by passing in nil pointer
 func SetLog(l *zap.Logger) {
 	if l != nil {
@@ -37,13 +38,14 @@ func SetLog(l *zap.Logger) {
 }
 
 // SetLogLevel sets the rmqclient log level
+//
 // noop if caller provides it's own zap logger
-func SetLogLevel(l zapcore.Level) {
+func SetLogLevel(level zapcore.Level) {
 	if logger.provided {
 		return
 	}
 
-	logger.atom.SetLevel(l)
+	logger.atom.SetLevel(level)
 }
 
 func initLogger() {

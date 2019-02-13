@@ -28,6 +28,8 @@ func (rmq *RmqStruct) RegisterConsumeHandle(handle ConsumeHandle) {
 }
 
 // Run starts rabbitmq service
+//
+// Runs as daemon, exit on caller's context cancel()
 func (rmq *RmqStruct) Run() {
 	logger.Info(
 		"service starts",
