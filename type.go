@@ -2,6 +2,7 @@ package rmqclient
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -27,18 +28,34 @@ type (
 
 	// RmqStruct is the instance of rabbitmq service
 	RmqStruct struct {
-		ctx                context.Context
-		uuid               string
-		config             RmqConfig
-		connection         *amqp.Connection
-		channel            *amqp.Channel
-		consumeHandle      ConsumeHandle    // Consume handler
-		connCloseError     chan *amqp.Error // NotifyClose
-		channelCancelError chan string      // NotifyCancel
+		ctx        context.Context
+		uuid       string
+		config     RmqConfig
+		connection *amqp.Connection
+		// channel            *amqp.Channel
+		rwlock         sync.RWMutex
+		consumeHandles map[string]*handle // Consume handler, use https://golang.org/pkg/sync/#Map ?
+		connCloseError chan *amqp.Error   // NotifyClose
 	}
 
 	// ConsumeHandle consumer callback handle's signature
 	//
 	// Handle should honor passing-in context for cleanup
-	ConsumeHandle func(context.Context, *amqp.Channel) error
+	ConsumeHandle func(context.Context, <-chan amqp.Delivery) error
+)
+
+type (
+	handle struct {
+		h         ConsumeHandle
+		cancel    context.CancelFunc
+		running   bool
+		autoAck   bool // autoack
+		exclusive bool // exclusive
+		noWait    bool // nowait
+	}
+
+	channel struct {
+		c                  *amqp.Channel
+		channelCancelError chan string // NotifyCancel
+	}
 )
