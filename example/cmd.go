@@ -14,7 +14,6 @@ import (
 
 func consume_1(ctx context.Context, d <-chan amqp.Delivery) error {
 	for {
-		fmt.Println("FUCK in consume_1")
 		select {
 		case <-ctx.Done():
 			return errors.New("application ends")
@@ -70,11 +69,11 @@ func main() {
 
 	r, _ := rmq.NewRmq(ctx, config)
 	r.RegisterHandle("test_queue_1", consume_1, false, false, true)
-	r.Run()
-
 	r.RegisterHandle("test_queue_2", consume_2, false, false, true)
 	// r.RegisterHandle("test_queue_3", consume_2, false, false, true)
-	// r.UnregisterHandle("test_queue_3")
+	r.Run()
+
+	r.UnregisterHandle("test_queue_3")
 
 	<-ctx.Done()
 	time.Sleep(3 * time.Second)

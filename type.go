@@ -3,6 +3,7 @@ package rmqclient
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -48,7 +49,7 @@ type (
 	handle struct {
 		h         ConsumeHandle
 		cancel    context.CancelFunc
-		running   bool
+		running   atomic.Value
 		autoAck   bool // autoack
 		exclusive bool // exclusive
 		noWait    bool // nowait

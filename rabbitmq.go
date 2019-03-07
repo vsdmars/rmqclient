@@ -3,6 +3,7 @@ package rmqclient
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -42,10 +43,12 @@ func (rmq *RmqStruct) RegisterHandle(
 	if _, ok := rmq.consumeHandles[name]; ok {
 		err = dupHandleErr
 	} else {
+		running := atomic.Value{}
+		running.Store(false)
 		rmq.consumeHandles[name] = &handle{
 			h,
 			nil,
-			false, // init. false as not running
+			running,
 			autoAck,
 			exclusive,
 			noWait,
@@ -61,11 +64,11 @@ func (rmq *RmqStruct) UnregisterHandle(name string) (err error) {
 	rmq.rwlock.Lock()
 
 	if h, ok := rmq.consumeHandles[name]; ok {
+		delete(rmq.consumeHandles, name)
+
 		if h.cancel != nil {
 			h.cancel()
 		}
-
-		delete(rmq.consumeHandles, name)
 	} else {
 		err = noHandleErr
 	}

@@ -13,17 +13,6 @@ import (
 
 var svcEndError = errors.New("service ends, cleanup connection loop")
 
-// defaultHandle is a template for handler writers
-func defaultHandle(ctx context.Context, d <-chan amqp.Delivery) error {
-	logger.Info(
-		"default rabbitmq consume handler",
-		zap.String("service", serviceName),
-	)
-
-	<-ctx.Done()
-	return errors.New("service ends")
-}
-
 func (rmq *RmqStruct) start() <-chan string {
 	status := make(chan string)
 
@@ -53,7 +42,6 @@ func (rmq *RmqStruct) start() <-chan string {
 			close(status)
 		}()
 
-		// create rabbitmq connection
 		if err := rmq.createConnect(); err != nil {
 			return
 		}
@@ -90,35 +78,6 @@ func (rmq *RmqStruct) catchEvent() error {
 				err,
 				true, // reconnect
 			}
-			// case tag, ok := <-rmq.channelCancelError:
-			// // interestingly, the amqp library won't trigger
-			// // this event iff we are not using amqp.Channel
-			// // to declare the queue.
-			// // However, if the queue is autodeleted, this event will be triggered.
-			// // Log only.
-
-			// if !ok {
-			// fmt.Println("SHIT, closed!")
-
-			// logger.Warn(
-			// "channel cancel event closed",
-			// zap.String("service", serviceName),
-			// zap.String("uuid", rmq.uuid),
-			// )
-
-			// rmq.channelCancelError = make(chan string)
-			// rmq.channel.NotifyCancel(rmq.channelCancelError)
-
-			// continue
-			// }
-
-			// logger.Warn(
-			// "channel cancel event occurred",
-			// zap.String("service", serviceName),
-			// zap.String("uuid", rmq.uuid),
-			// zap.String("queue", tag),
-			// )
-			// }
 		}
 	}
 }
@@ -167,8 +126,8 @@ func (rmq *RmqStruct) createConnect() error {
 
 	rmq.connection = myconn
 	rmq.connCloseError = make(chan *amqp.Error)
-	// amqp library is resposible for closing the error channel
 	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyClose
+	// amqp library is responsible for closing the error channel
 	// Connection exceptions will be broadcast to all open channels and
 	// all channels will be closed, where channel exceptions will only
 	// be broadcast to listeners to this channel.
@@ -187,39 +146,73 @@ func (rmq *RmqStruct) createChannel() (*amqp.Channel, error) {
 			zap.String("error", err.Error()),
 		)
 
-		return err
+		return nil, err
 	}
 
-	// These can be sent from the server when a queue is deleted or
-	// when consuming from a mirrored queue where the master has just failed
-	// (and was moved to another node)
-	channelCancelError = make(chan string)
+	channelCancelError := make(chan string)
 	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyCancel
-	// If the queue doesn't exist, the channel is marked as close state,
-	// which makes amqp library VERY hard to use.
+	// If a queue doesn't exist, the channel is marked as close state,
+	// which makes amqp library hard to use.
 	// Thus, we compensate this by create new channel for each queue.
 	myChannel.NotifyCancel(channelCancelError)
-	return nil
+
+	go func() {
+		for {
+			select {
+			case <-rmq.ctx.Done():
+				return
+			case tag, ok := <-channelCancelError:
+				// If a queue doesn't exist (deleted or never declared)
+				// in this channel, channelCancelError is closed immediately.
+				if !ok {
+					logger.Warn(
+						"channel cancel event closed",
+						zap.String("service", serviceName),
+						zap.String("uuid", rmq.uuid),
+					)
+				} else {
+					logger.Warn(
+						"channel cancel event occurred",
+						zap.String("service", serviceName),
+						zap.String("uuid", rmq.uuid),
+						zap.String("queue", tag),
+					)
+				}
+
+				_ = myChannel.Close()
+				return
+			}
+		}
+	}()
+
+	return myChannel, nil
 }
 
 func (rmq *RmqStruct) consume(ctx context.Context) {
-	go func() {
-		// runs every 10 seconds check for new consumer
-		ticker := time.NewTicker(10 * time.Second)
+	// check handler that is not running in every 10 seconds.
+	ticker := time.NewTicker(10 * time.Second)
 
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			func() {
+				defer rmq.rwlock.RUnlock()
 				rmq.rwlock.RLock()
 
 				for name, handle := range rmq.consumeHandles {
-					if handle.running {
+					r := handle.running.Load().(bool)
+					if r {
 						continue
 					}
 
-					d, err := rmq.channel.Consume(
+					channel, err := rmq.createChannel()
+					if err != nil {
+						continue
+					}
+
+					d, err := channel.Consume(
 						name,
 						name,             // consumerTag
 						handle.autoAck,   // autoack
@@ -228,7 +221,6 @@ func (rmq *RmqStruct) consume(ctx context.Context) {
 						handle.noWait,    // nowait
 						nil,
 					)
-
 					if err != nil {
 						logger.Error(
 							"channel.Consume error",
@@ -242,15 +234,18 @@ func (rmq *RmqStruct) consume(ctx context.Context) {
 
 					hctx, hcancel := context.WithCancel(ctx)
 					handle.cancel = hcancel
-					handle.running = true
+					handle.running.Store(true)
+
+					// avoid race condition
+					chandle := handle
 
 					go func() {
 						defer func() {
-							handle.running = false
+							chandle.running.Store(false)
 							hcancel()
 						}()
 
-						if err := handle.h(hctx, d); err != nil {
+						if err := chandle.h(hctx, d); err != nil {
 							logger.Warn(
 								"consume handler ended",
 								zap.String("service", serviceName),
@@ -261,10 +256,9 @@ func (rmq *RmqStruct) consume(ctx context.Context) {
 						}
 					}()
 				}
-				rmq.rwlock.RUnlock()
-			}
+			}()
 		}
-	}()
+	}
 }
 
 // TODO: fill the guts~
