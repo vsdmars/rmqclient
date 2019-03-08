@@ -16,7 +16,7 @@ type retryError struct {
 }
 
 type (
-	// RmqConfig config for rabbitmq
+	// RmqConfig is the config type for rmqclient
 	RmqConfig struct {
 		Username      string        `validate:"required"`
 		Password      string        `validate:"required"`
@@ -39,6 +39,7 @@ type (
 		connCloseError chan *amqp.Error   // NotifyClose
 	}
 
+	// Publish is the publish interface for client
 	// https://godoc.org/github.com/streadway/amqp#Channel.Publish
 	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyReturn
 	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyPublish

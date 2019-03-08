@@ -3,6 +3,12 @@ package rmqclient
 import (
 	"context"
 	"errors"
+	"os"
+	"runtime"
+	"runtime/pprof"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/google/uuid"
 	"github.com/streadway/amqp"
@@ -103,7 +109,8 @@ func (rmq *RmqStruct) GetPublish(confirm bool) (*Publish, error) {
 
 			return nil, errNoConnection
 		} else {
-			var pubC chan amqp.Confirmation = nil
+			// Use 'else' here due to I need the 'ch' in scope.
+			var pubC chan amqp.Confirmation
 
 			if confirm {
 				if err := ch.Confirm(false); err != nil {
@@ -133,6 +140,19 @@ func (rmq *RmqStruct) GetPublish(confirm bool) (*Publish, error) {
 func (rmq *RmqStruct) Run() {
 	// sync logger
 	defer Sync()
+
+	f, err := os.Create("/tmp/rmqclientCpuProfile")
+	if err != nil {
+		return
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
+
+	// just fires up http server for profiling purpose.
+	go func() {
+		runtime.SetMutexProfileFraction(5)
+		http.ListenAndServe("localhost:4242", nil)
+	}()
 
 	go func() {
 		logger.Info(

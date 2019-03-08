@@ -62,7 +62,7 @@ func (rmq *RmqStruct) start() <-chan string {
 func (rmq *RmqStruct) catchEvent() error {
 	for {
 		select {
-		// root context.
+		// root context
 		case <-rmq.ctx.Done():
 			return retryError{
 				errSvcEnd,
@@ -154,10 +154,10 @@ func (rmq *RmqStruct) createChannel() (*amqp.Channel, error) {
 	go func() {
 		for {
 			select {
-			// root context.
+			// root context
 			case <-rmq.ctx.Done():
 				return
-			// while lost connection will hit here due to channelCancelError is closed.
+			// while lost connection will hit here due to channelCancelError is closed
 			case tag, ok := <-channelCancelError:
 				// If a queue doesn't exist (deleted or never declared)
 				// in this channel, channelCancelError is closed immediately.
@@ -186,7 +186,7 @@ func (rmq *RmqStruct) createChannel() (*amqp.Channel, error) {
 }
 
 func (rmq *RmqStruct) consume() {
-	// check handler that is not running in every 10 seconds.
+	// check handler that is not running in every 10 seconds
 	ticker := time.NewTicker(10 * time.Second)
 
 	cfunc := func() {
@@ -253,7 +253,7 @@ func (rmq *RmqStruct) consume() {
 
 	for {
 		select {
-		// connection context, when lost connection, hits here.
+		// connection context, hits here when lost connection
 		case <-rmq.cctx.Load().(context.Context).Done():
 			return
 		case <-ticker.C:
