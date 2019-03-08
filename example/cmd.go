@@ -12,30 +12,14 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func consume_1(ctx context.Context, d <-chan amqp.Delivery) error {
+func consume(ctx context.Context, d <-chan amqp.Delivery) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return errors.New("application ends")
 		case val, ok := <-d:
 			if ok {
-				fmt.Printf("msg: %v\n", string(val.Body))
-				val.Ack(false)
-			} else {
-				return errors.New("delivery channel closed")
-			}
-		}
-	}
-}
-
-func consume_2(ctx context.Context, d <-chan amqp.Delivery) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return errors.New("application ends")
-		case val, ok := <-d:
-			if ok {
-				fmt.Printf("msg: %v\n", string(val.Body))
+				fmt.Printf("received msg: %v\n", string(val.Body))
 				val.Ack(false)
 			} else {
 				return errors.New("delivery channel closed")
@@ -68,12 +52,53 @@ func main() {
 	rmq.SetLogLevel(zapcore.DebugLevel)
 
 	r, _ := rmq.NewRmq(ctx, config)
-	r.RegisterHandle("test_queue_1", consume_1, false, false, true)
-	r.RegisterHandle("test_queue_2", consume_2, false, false, true)
-	// r.RegisterHandle("test_queue_3", consume_2, false, false, true)
+	// Register comsume handler
+	r.RegisterHandle("test_queue_1", consume, false, false, true)
 	r.Run()
 
-	r.UnregisterHandle("test_queue_3")
+	// Publish message
+	go func() {
+		// ticker := time.NewTicker(3 * time.Second)
+	RESTART:
+		var p *rmq.Publish
+		for {
+			rp, err := r.GetPublish(true)
+			if err != nil {
+				fmt.Printf("GetPublish err: %v\n", err.Error())
+				time.Sleep(3 * time.Second)
+				continue
+			}
+
+			p = rp
+			break
+		}
+
+		defer p.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+				// case <-ticker.C:
+			default:
+				if err := p.Publish(
+					"test_exchange_1",
+					"RUN",
+					false,
+					false,
+					amqp.Publishing{
+						ContentType:  "text/plain",
+						DeliveryMode: 2,
+						Body:         []byte("vsdmars testing~"),
+						MessageId:    "!42!",
+					},
+				); err != nil {
+					fmt.Printf("Publish error: %v\n", err.Error())
+					goto RESTART
+				}
+			}
+		}
+	}()
 
 	<-ctx.Done()
 	time.Sleep(3 * time.Second)

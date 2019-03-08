@@ -3,7 +3,6 @@ package rmqclient
 import (
 	"context"
 	"errors"
-	"sync/atomic"
 
 	"github.com/google/uuid"
 	"github.com/streadway/amqp"
@@ -32,8 +31,8 @@ func NewRmq(ctx context.Context, cfg RmqConfig) (*RmqStruct, error) {
 
 // RegisterHandle register consumer's handle
 func (rmq *RmqStruct) RegisterHandle(
-	name string, // queue's name
-	h ConsumeHandle,
+	name string, // queue name
+	h ConsumeHandle, // ConsumeHandle
 	autoAck bool, // autoack
 	exclusive bool, // exclusive
 	noWait bool, // nowait
@@ -44,16 +43,14 @@ func (rmq *RmqStruct) RegisterHandle(
 	if _, ok := rmq.consumeHandles[name]; ok {
 		err = errDupHandle
 	} else {
-		running := atomic.Value{}
-		running.Store(false)
 		rmq.consumeHandles[name] = &handle{
-			h,
-			nil,
-			running,
-			autoAck,
-			exclusive,
-			noWait,
+			h:         h,         // ConsumeHandle
+			cancel:    nil,       // context.CancelFunc
+			autoAck:   autoAck,   // bool
+			exclusive: exclusive, // bool
+			noWait:    noWait,    // bool
 		}
+		rmq.consumeHandles[name].running.Store(false)
 	}
 
 	return
@@ -78,63 +75,54 @@ func (rmq *RmqStruct) UnregisterHandle(name string) (err error) {
 }
 
 // GetPublish retrieve publish from pool
-func (rmq *RmqStruct) GetPublish(confirm bool) *publish {
-	if rmq.channelPool.New == nil {
-		rmq.channelPool.New = func() interface{} {
-			if rmq.cctx.Done() == nil || rmq.connection == nil {
-				return nil
-			}
+func (rmq *RmqStruct) GetPublish(confirm bool) (*Publish, error) {
+	if rmq.cctx.Load() == nil ||
+		rmq.cctx.Load().(context.Context).Done() == nil ||
+		rmq.connection.Load() == nil {
+		return nil, errNoConnection
+	}
 
-			select {
-			// connection context.
-			case <-rmq.cctx.Done():
-				logger.Error(
-					"no rabbitmq connection",
-					zap.String("service", serviceName),
-					zap.String("uuid", rmq.uuid),
-				)
+	select {
+	// connection context.
+	case <-rmq.cctx.Load().(context.Context).Done():
+		logger.Error(
+			"no rabbitmq connection",
+			zap.String("service", serviceName),
+			zap.String("uuid", rmq.uuid),
+		)
 
-				return nil
-			default:
-				if ch, err := rmq.connection.Channel(); err != nil {
+		return nil, errNoConnection
+	default:
+		if ch, err := rmq.connection.Load().(*amqp.Connection).Channel(); err != nil {
+			logger.Error(
+				"create publish channel failed",
+				zap.String("service", serviceName),
+				zap.String("uuid", rmq.uuid),
+				zap.String("error", err.Error()),
+			)
+
+			return nil, errNoConnection
+		} else {
+			var pubC chan amqp.Confirmation = nil
+
+			if confirm {
+				if err := ch.Confirm(false); err != nil {
 					logger.Error(
-						"create publish channel failed",
+						"set publish confirm failed",
 						zap.String("service", serviceName),
 						zap.String("uuid", rmq.uuid),
 						zap.String("error", err.Error()),
 					)
 
-					return nil
-				} else {
-					var pubC chan amqp.Confirmation = nil
-
-					if confirm {
-						if err := ch.Confirm(false); err != nil {
-							logger.Error(
-								"set publish confirm failed",
-								zap.String("service", serviceName),
-								zap.String("uuid", rmq.uuid),
-								zap.String("error", err.Error()),
-							)
-
-							return nil
-						}
-
-						pubC = ch.NotifyPublish(make(chan amqp.Confirmation, 10))
-					}
-
-					return &publish{ch, rmq, confirm, pubC}
+					return nil, errNoConnection
 				}
+
+				pubC = ch.NotifyPublish(make(chan amqp.Confirmation, 10))
 			}
+
+			return &Publish{ch, rmq, false, confirm, pubC}, nil
 		}
 	}
-
-	return rmq.channelPool.Get().(*publish)
-}
-
-// ReleasePublish recycle 'publish' instance.
-func (rmq *RmqStruct) ReleasePublish(p *publish) {
-	rmq.channelPool.Put(p)
 }
 
 // Run starts rabbitmq service
@@ -161,6 +149,10 @@ func (rmq *RmqStruct) Run() {
 					zap.String("service", serviceName),
 					zap.String("uuid", rmq.uuid),
 				)
+
+				if rmq.connection.Load() != nil {
+					_ = rmq.connection.Load().(*amqp.Connection).Close()
+				}
 				return
 			default:
 				for s := range rmq.start() {

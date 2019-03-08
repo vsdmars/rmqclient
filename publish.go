@@ -8,27 +8,48 @@ import (
 )
 
 var errNoConnection = errors.New("no rabbitmq connection")
+var errChannelClosed = errors.New("channel closed")
+var errPublishFailed = errors.New("publish failed")
 
-func (p *publish) Publish(
+// Publish send message to the rabbitmq server.
+func (p *Publish) Publish(
 	exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
 
-	pfunc := func() error {
-		if err := p.c.Publish(exchange, key, mandatory, immediate, msg); err != nil {
-			return err
-		}
+	if p.closed {
+		return errChannelClosed
 	}
 
-	select {
-	case <-p.r.cctx.Done():
-		logger.Error(
-			"publish failed",
+	if err := p.c.Publish(exchange, key, mandatory, immediate, msg); err != nil {
+		return err
+	}
+
+	if p.confirm {
+		c := <-p.pubConfirm
+
+		logger.Debug(
+			"publish confirm message",
 			zap.String("service", serviceName),
-			zap.String("uuid", rmq.uuid),
-			zap.String("error", "no rabbitmq connection"),
+			zap.String("uuid", p.rmq.uuid),
+			zap.Uint64("DeliveryTag", c.DeliveryTag),
+			zap.Bool("Ack", c.Ack),
 		)
 
-		return errNoConnection
-	default:
-		return pfunc()
+		if c.Ack {
+			return nil
+		}
+		return errPublishFailed
 	}
+
+	return nil
+}
+
+// Confirm returns current publish's confirm mode.
+func (p *Publish) Confirm() bool {
+	return p.confirm
+}
+
+// Close closes publish channel.
+func (p *Publish) Close() {
+	p.closed = true
+	p.c.Close()
 }

@@ -19,7 +19,7 @@ func (rmq *RmqStruct) start() <-chan string {
 	go func() {
 		var reconnect = true
 		sctx, cancel := context.WithCancel(rmq.ctx)
-		rmq.cctx = sctx
+		rmq.cctx.Store(sctx)
 
 		defer func() {
 			// cleanup consumer goroutine
@@ -119,20 +119,20 @@ func (rmq *RmqStruct) createConnect() error {
 		return err
 	}
 
-	rmq.connection = myconn
 	rmq.connCloseError = make(chan *amqp.Error)
 	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyClose
 	// amqp library is responsible for closing the error channel
 	// Connection exceptions will be broadcast to all open channels and
 	// all channels will be closed, where channel exceptions will only
 	// be broadcast to listeners to this channel.
-	rmq.connection.NotifyClose(rmq.connCloseError)
+	myconn.NotifyClose(rmq.connCloseError)
+	rmq.connection.Store(myconn)
 	return nil
 }
 
 // createChannel creates amqp channel
 func (rmq *RmqStruct) createChannel() (*amqp.Channel, error) {
-	myChannel, err := rmq.connection.Channel()
+	myChannel, err := rmq.connection.Load().(*amqp.Connection).Channel()
 	if err != nil {
 		logger.Warn(
 			"create channel failed",
@@ -224,7 +224,7 @@ func (rmq *RmqStruct) consume() {
 				continue
 			}
 
-			hctx, hcancel := context.WithCancel(rmq.cctx)
+			hctx, hcancel := context.WithCancel(rmq.cctx.Load().(context.Context))
 			handle.cancel = hcancel
 			handle.running.Store(true)
 
@@ -253,7 +253,7 @@ func (rmq *RmqStruct) consume() {
 	for {
 		select {
 		// connection context, when lost connection, hits here.
-		case <-rmq.cctx.Done():
+		case <-rmq.cctx.Load().(context.Context).Done():
 			return
 		case <-ticker.C:
 			cfunc()

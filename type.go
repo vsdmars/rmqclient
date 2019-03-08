@@ -31,13 +31,24 @@ type (
 	RmqStruct struct {
 		rwlock         sync.RWMutex
 		ctx            context.Context // root context
-		cctx           context.Context // connection context
+		cctx           atomic.Value    // context.Context, connection context
 		uuid           string
 		config         RmqConfig
 		consumeHandles map[string]*handle // Consume handler, use https://golang.org/pkg/sync/#Map ?
-		channelPool    sync.Pool          // channel for publishers
-		connection     *amqp.Connection
-		connCloseError chan *amqp.Error // NotifyClose
+		connection     atomic.Value       // *amqp.Connection
+		connCloseError chan *amqp.Error   // NotifyClose
+	}
+
+	// https://godoc.org/github.com/streadway/amqp#Channel.Publish
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyReturn
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyPublish
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyConfirm
+	Publish struct {
+		c          *amqp.Channel
+		rmq        *RmqStruct
+		closed     bool
+		confirm    bool
+		pubConfirm chan amqp.Confirmation
 	}
 
 	// ConsumeHandle consumer callback handle's signature
@@ -54,16 +65,5 @@ type (
 		autoAck   bool // autoack
 		exclusive bool // exclusive
 		noWait    bool // nowait
-	}
-
-	// https://godoc.org/github.com/streadway/amqp#Channel.Publish
-	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyReturn
-	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyPublish
-	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyConfirm
-	publish struct {
-		c          *amqp.Channel
-		r          *RmqStruct
-		confirm    bool
-		pubConfirm chan amqp.Confirmation
 	}
 )
