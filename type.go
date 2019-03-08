@@ -29,14 +29,15 @@ type (
 
 	// RmqStruct is the instance of rabbitmq service
 	RmqStruct struct {
-		ctx        context.Context
-		uuid       string
-		config     RmqConfig
-		connection *amqp.Connection
-		// channel            *amqp.Channel
 		rwlock         sync.RWMutex
+		ctx            context.Context // root context
+		cctx           context.Context // connection context
+		uuid           string
+		config         RmqConfig
 		consumeHandles map[string]*handle // Consume handler, use https://golang.org/pkg/sync/#Map ?
-		connCloseError chan *amqp.Error   // NotifyClose
+		channelPool    sync.Pool          // channel for publishers
+		connection     *amqp.Connection
+		connCloseError chan *amqp.Error // NotifyClose
 	}
 
 	// ConsumeHandle consumer callback handle's signature
@@ -55,8 +56,14 @@ type (
 		noWait    bool // nowait
 	}
 
-	channel struct {
-		c                  *amqp.Channel
-		channelCancelError chan string // NotifyCancel
+	// https://godoc.org/github.com/streadway/amqp#Channel.Publish
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyReturn
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyPublish
+	// https://godoc.org/github.com/streadway/amqp#Channel.NotifyConfirm
+	publish struct {
+		c          *amqp.Channel
+		r          *RmqStruct
+		confirm    bool
+		pubConfirm chan amqp.Confirmation
 	}
 )

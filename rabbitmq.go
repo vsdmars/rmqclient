@@ -6,12 +6,13 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/streadway/amqp"
 	"go.uber.org/zap"
 )
 
 var (
-	noHandleErr  = errors.New("handle not registered")
-	dupHandleErr = errors.New("handle already registered")
+	errNoHandle  = errors.New("handle not registered")
+	errDupHandle = errors.New("handle already registered")
 )
 
 // NewRmq creates new rabbitmq connection instance
@@ -41,7 +42,7 @@ func (rmq *RmqStruct) RegisterHandle(
 	rmq.rwlock.Lock()
 
 	if _, ok := rmq.consumeHandles[name]; ok {
-		err = dupHandleErr
+		err = errDupHandle
 	} else {
 		running := atomic.Value{}
 		running.Store(false)
@@ -70,10 +71,70 @@ func (rmq *RmqStruct) UnregisterHandle(name string) (err error) {
 			h.cancel()
 		}
 	} else {
-		err = noHandleErr
+		err = errNoHandle
 	}
 
 	return
+}
+
+// GetPublish retrieve publish from pool
+func (rmq *RmqStruct) GetPublish(confirm bool) *publish {
+	if rmq.channelPool.New == nil {
+		rmq.channelPool.New = func() interface{} {
+			if rmq.cctx.Done() == nil || rmq.connection == nil {
+				return nil
+			}
+
+			select {
+			// connection context.
+			case <-rmq.cctx.Done():
+				logger.Error(
+					"no rabbitmq connection",
+					zap.String("service", serviceName),
+					zap.String("uuid", rmq.uuid),
+				)
+
+				return nil
+			default:
+				if ch, err := rmq.connection.Channel(); err != nil {
+					logger.Error(
+						"create publish channel failed",
+						zap.String("service", serviceName),
+						zap.String("uuid", rmq.uuid),
+						zap.String("error", err.Error()),
+					)
+
+					return nil
+				} else {
+					var pubC chan amqp.Confirmation = nil
+
+					if confirm {
+						if err := ch.Confirm(false); err != nil {
+							logger.Error(
+								"set publish confirm failed",
+								zap.String("service", serviceName),
+								zap.String("uuid", rmq.uuid),
+								zap.String("error", err.Error()),
+							)
+
+							return nil
+						}
+
+						pubC = ch.NotifyPublish(make(chan amqp.Confirmation, 10))
+					}
+
+					return &publish{ch, rmq, confirm, pubC}
+				}
+			}
+		}
+	}
+
+	return rmq.channelPool.Get().(*publish)
+}
+
+// ReleasePublish recycle 'publish' instance.
+func (rmq *RmqStruct) ReleasePublish(p *publish) {
+	rmq.channelPool.Put(p)
 }
 
 // Run starts rabbitmq service
