@@ -151,7 +151,7 @@ func (rmq *RmqStruct) Run() {
 				)
 
 				if rmq.connection.Load() != nil {
-					_ = rmq.connection.Load().(*amqp.Connection).Close()
+					rmq.connection.Load().(*amqp.Connection).Close()
 				}
 				return
 			default:

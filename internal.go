@@ -176,7 +176,7 @@ func (rmq *RmqStruct) createChannel() (*amqp.Channel, error) {
 					)
 				}
 
-				_ = myChannel.Close()
+				myChannel.Close()
 				return
 			}
 		}
@@ -230,6 +230,7 @@ func (rmq *RmqStruct) consume() {
 
 			// avoid race condition
 			chandle := handle
+			cname := name
 
 			go func() {
 				defer func() {
@@ -242,7 +243,7 @@ func (rmq *RmqStruct) consume() {
 						"consume handler ended",
 						zap.String("service", serviceName),
 						zap.String("uuid", rmq.uuid),
-						zap.String("queue", name),
+						zap.String("queue", cname),
 						zap.String("error", err.Error()),
 					)
 				}
