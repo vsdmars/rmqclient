@@ -34,7 +34,7 @@ type (
 		cctx           atomic.Value    // context.Context, connection context
 		uuid           string
 		config         RmqConfig
-		consumeHandles map[string]*handle // Consume handler, use https://golang.org/pkg/sync/#Map ?
+		consumeHandles map[string]*handle // Consume handler, DO NOT USE sync.Map
 		connection     atomic.Value       // *amqp.Connection
 		connCloseError chan *amqp.Error   // NotifyClose
 	}
