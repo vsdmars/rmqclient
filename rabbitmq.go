@@ -3,12 +3,9 @@ package rmqclient
 import (
 	"context"
 	"errors"
-	"os"
-	"runtime"
-	"runtime/pprof"
 
-	"net/http"
-	_ "net/http/pprof"
+	// "net/http"
+	// _ "net/http/pprof"
 
 	"github.com/google/uuid"
 	"github.com/streadway/amqp"
@@ -141,18 +138,18 @@ func (rmq *RmqStruct) Run() {
 	// sync logger
 	defer Sync()
 
-	f, err := os.Create("/tmp/rmqclientCpuProfile")
-	if err != nil {
-		return
-	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
+	// f, err := os.Create("/tmp/rmqclientCpuProfile")
+	// if err != nil {
+	// return
+	// }
+	// pprof.StartCPUProfile(f)
+	// defer pprof.StopCPUProfile()
 
-	// just fires up http server for profiling purpose.
-	go func() {
-		runtime.SetMutexProfileFraction(5)
-		http.ListenAndServe("localhost:4242", nil)
-	}()
+	// // just fires up http server for profiling purpose.
+	// go func() {
+	// runtime.SetMutexProfileFraction(5)
+	// http.ListenAndServe("localhost:4242", nil)
+	// }()
 
 	go func() {
 		logger.Info(
