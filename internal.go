@@ -36,6 +36,10 @@ func (rmq *RmqStruct) start() <-chan string {
 					),
 				)
 
+				fmt.Printf(
+					"DEBUG hit: wait time: %s\n",
+					rmq.config.ReconnectWait.String())
+
 				time.Sleep(rmq.config.ReconnectWait)
 			}
 
