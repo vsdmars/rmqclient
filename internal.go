@@ -32,11 +32,11 @@ func (rmq *RmqStruct) start() <-chan string {
 					zap.String("uuid", rmq.uuid),
 					zap.String(
 						"wait_time",
-						(rmq.config.ReconnectWait*time.Second).String(),
+						rmq.config.ReconnectWait.String(),
 					),
 				)
 
-				time.Sleep(rmq.config.ReconnectWait * time.Second)
+				time.Sleep(rmq.config.ReconnectWait)
 			}
 
 			// cleanup status

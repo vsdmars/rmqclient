@@ -45,7 +45,7 @@ func main() {
 		Host:          "localhost",
 		Vhost:         "/vsdmars",
 		Port:          5673,
-		ReconnectWait: time.Duration(3),
+		ReconnectWait: 3 * time.Second,
 	}
 
 	// https://godoc.org/go.uber.org/zap/zapcore#Level

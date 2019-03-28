@@ -23,7 +23,7 @@ type (
 		Host          string        `validate:"required"`
 		Vhost         string        `validate:"required"`
 		Port          int           `validate:"required"`
-		ReconnectWait time.Duration `validate:"isdefault"` // use in seconds
+		ReconnectWait time.Duration `validate:"isdefault"`
 		// Logging       bool   `validate:"isdefault"`
 	}
 
