@@ -21,6 +21,14 @@ func (rmq *RmqStruct) start() <-chan string {
 		sctx, cancel := context.WithCancel(rmq.ctx)
 		rmq.cctx.Store(sctx)
 
+		logger.Info(
+			"HACK",
+			zap.String(
+				"wait_time",
+				rmq.config.ReconnectWait.String(),
+			),
+		)
+
 		defer func() {
 			// cleanup consumer goroutine
 			cancel()
@@ -35,10 +43,6 @@ func (rmq *RmqStruct) start() <-chan string {
 						rmq.config.ReconnectWait.String(),
 					),
 				)
-
-				fmt.Printf(
-					"DEBUG hit: wait time: %s\n",
-					rmq.config.ReconnectWait.String())
 
 				time.Sleep(rmq.config.ReconnectWait)
 			}
