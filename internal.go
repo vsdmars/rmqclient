@@ -21,14 +21,6 @@ func (rmq *RmqStruct) start() <-chan string {
 		sctx, cancel := context.WithCancel(rmq.ctx)
 		rmq.cctx.Store(sctx)
 
-		logger.Info(
-			"HACK",
-			zap.String(
-				"wait_time",
-				rmq.config.ReconnectWait.String(),
-			),
-		)
-
 		defer func() {
 			// cleanup consumer goroutine
 			cancel()
