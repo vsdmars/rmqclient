@@ -3,21 +3,16 @@ package rmqclient
 import (
 	"fmt"
 	"os"
-	gosync "sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-var logger appLogger
-var origLogger appLogger
-var once gosync.Once
+var logger serviceLogger
+var origLogger serviceLogger
 
 func init() {
 	initLogger()
-
-	// default debug level
-	SetLogLevel(zapcore.DebugLevel)
 }
 
 // Sync sync logger output
@@ -47,36 +42,32 @@ func SetLogLevel(level zapcore.Level) {
 		return
 	}
 
-	logger.atom.SetLevel(level)
+	logger.config.Level.SetLevel(level)
 }
 
 func initLogger() {
-	initLogger := func() {
-		// default log level set to 'info'
-		atom := zap.NewAtomicLevelAt(zap.InfoLevel)
+	// default log level set to 'info'
+	atom := zap.NewAtomicLevelAt(zap.InfoLevel)
 
-		config := zap.Config{
-			Level:       atom,
-			Development: false,
-			Sampling: &zap.SamplingConfig{
-				Initial:    100,
-				Thereafter: 100,
-			},
-			Encoding:         "json", // console, json, toml
-			EncoderConfig:    zap.NewProductionEncoderConfig(),
-			OutputPaths:      []string{"stderr"},
-			ErrorOutputPaths: []string{"stderr"},
-		}
-
-		mylogger, err := config.Build()
-		if err != nil {
-			fmt.Printf("Initialize zap logger error: %v", err)
-			os.Exit(1)
-		}
-
-		logger = appLogger{mylogger, &atom, false}
-		origLogger = logger
+	config := zap.Config{
+		Level:       atom,
+		Development: false,
+		Sampling: &zap.SamplingConfig{
+			Initial:    100,
+			Thereafter: 100,
+		},
+		Encoding:         "json", // console, json, toml
+		EncoderConfig:    zap.NewProductionEncoderConfig(),
+		OutputPaths:      []string{"stderr"},
+		ErrorOutputPaths: []string{"stderr"},
 	}
 
-	once.Do(initLogger)
+	mylogger, err := config.Build()
+	if err != nil {
+		fmt.Printf("Initialize zap logger error: %v", err)
+		os.Exit(1)
+	}
+
+	logger = serviceLogger{mylogger, &config, false}
+	origLogger = logger
 }

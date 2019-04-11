@@ -4,8 +4,8 @@ import (
 	"go.uber.org/zap"
 )
 
-type appLogger struct {
+type serviceLogger struct {
 	*zap.Logger
-	atom     *zap.AtomicLevel
+	config   *zap.Config
 	provided bool
 }
